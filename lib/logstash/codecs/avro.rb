@@ -8,14 +8,14 @@ require "logstash/util"
 
 # Read serialized Avro records as Logstash events
 #
-# This plugin is used to serialize Logstash events as 
-# Avro datums, as well as deserializing Avro datums into 
+# This plugin is used to serialize Logstash events as
+# Avro datums, as well as deserializing Avro datums into
 # Logstash events.
 #
 # ==== Encoding
-# 
-# This codec is for serializing individual Logstash events 
-# as Avro datums that are Avro binary blobs. It does not encode 
+#
+# This codec is for serializing individual Logstash events
+# as Avro datums that are Avro binary blobs. It does not encode
 # Logstash events into an Avro file.
 #
 #
@@ -68,6 +68,10 @@ class LogStash::Codecs::Avro < LogStash::Codecs::Base
   public
   def decode(data)
     datum = StringIO.new(data)
+
+    magic_byte, schema_id = datum.read(5).unpack('cI>')
+    datum.rewind if magic_byte != 0
+
     decoder = Avro::IO::BinaryDecoder.new(datum)
     datum_reader = Avro::IO::DatumReader.new(@schema)
     yield LogStash::Event.new(datum_reader.read(decoder))

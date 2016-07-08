@@ -31,6 +31,20 @@ describe LogStash::Codecs::Avro do
         insist { event["bar"] } == test_event["bar"]
       end
     end
+
+    it "should return a LogStash::Event from avro data that has been encoded with a schema id in the first bytes" do
+      schema = Avro::Schema.parse(avro_config['schema_uri'])
+      dw = Avro::IO::DatumWriter.new(schema)
+      buffer = StringIO.new
+      encoder = Avro::IO::BinaryEncoder.new(buffer)
+      dw.write(test_event.to_hash, encoder)
+
+      subject.decode("\x00\x00\x00\x01p#{buffer.string}") do |event|
+        insist { event.is_a? LogStash::Event }
+        insist { event["foo"] } == test_event["foo"]
+        insist { event["bar"] } == test_event["bar"]
+      end
+    end
   end
 
   context "#encode" do
