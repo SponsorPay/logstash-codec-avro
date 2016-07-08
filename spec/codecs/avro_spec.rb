@@ -89,4 +89,11 @@ describe LogStash::Codecs::Avro do
       end
     end
   end
+
+  context "avro config uses neither schema_uri nor schema_registry_uri" do
+    it "raises error at initialization" do
+      expect { described_class.new({}) }.
+        to raise_error(RuntimeError, "You must configure either a `schema_uri` or a `schema_registry_uri`")
+    end
+  end
 end
