@@ -1,10 +1,13 @@
 # encoding: utf-8
 require "open-uri"
+
 require "avro"
 require "logstash/codecs/base"
 require "logstash/event"
 require "logstash/timestamp"
 require "logstash/util"
+require "schema_registry"
+require "schema_registry/client"
 
 # Read serialized Avro records as Logstash events
 #
@@ -54,35 +57,49 @@ class LogStash::Codecs::Avro < LogStash::Codecs::Base
   #
   # * http - `http://example.com/schema.avsc`
   # * file - `/path/to/schema.avsc`
-  config :schema_uri, :validate => :string, :required => true
+  config :schema_uri, :validate => :string
+  config :schema_registry_uri, :validate => :string
 
-  def open_and_read(uri_string)
-    open(uri_string).read
-  end
-
-  public
   def register
-    @schema = Avro::Schema.parse(open_and_read(schema_uri))
+    if schema_uri
+      @schema = Avro::Schema.parse(Kernel.open(schema_uri).read)
+    elsif schema_registry_uri
+      @schema_registry = SchemaRegistry::Client.new(schema_registry_uri)
+    else
+      raise "You must configure either a `schema_uri` or a `schema_registry_uri`"
+    end
   end
 
-  public
   def decode(data)
     datum = StringIO.new(data)
-
-    magic_byte, schema_id = datum.read(5).unpack('cI>')
-    datum.rewind if magic_byte != 0
-
+    parsed_schema = parsed_schema_for(datum)
     decoder = Avro::IO::BinaryDecoder.new(datum)
-    datum_reader = Avro::IO::DatumReader.new(@schema)
+    datum_reader = Avro::IO::DatumReader.new(parsed_schema)
     yield LogStash::Event.new(datum_reader.read(decoder))
   end
 
-  public
   def encode(event)
     dw = Avro::IO::DatumWriter.new(@schema)
     buffer = StringIO.new
     encoder = Avro::IO::BinaryEncoder.new(buffer)
     dw.write(event.to_hash, encoder)
     @on_event.call(event, buffer.string)
+  end
+
+  private
+
+  def parsed_schema_for(datum)
+    magic_byte, schema_id = datum.read(5).unpack('cI>')
+
+    if magic_byte == 0
+      schema_from_registry(schema_id)
+    else
+      datum.rewind
+      @schema
+    end
+  end
+
+  def schema_from_registry(schema_id)
+    @cached_schemas ||= Avro::Schema.parse(@schema_registry.schema(schema_id))
   end
 end

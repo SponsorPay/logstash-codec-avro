@@ -23,6 +23,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency "logstash-core-plugin-api", "~> 1.0"
 
   s.add_runtime_dependency "avro"  #(Apache 2.0 license)
+  s.add_runtime_dependency "schema_registry"
 
   s.add_development_dependency 'logstash-devutils'
 end
